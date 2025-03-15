@@ -24,3 +24,4 @@ libraryDependencies ++= Seq(
   // postgres for DB connectivity
   "org.postgresql" % "postgresql" % postgresVersion
 )
+
