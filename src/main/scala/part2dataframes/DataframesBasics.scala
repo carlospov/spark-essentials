@@ -84,6 +84,50 @@ object DataframesBasics extends App{
   val manualcarsDFwithImplicits = myCars.toDF("Name","MPG","Cylinders","Displacement","HP","Weight","Acceleration","Year","Country")
   manualcarsDFwithImplicits.printSchema()
 
+  /**
+   * Exercises
+   * 1) Create a Manual Dataframe describing smartphones
+   *  - make
+   *  - model
+   *  - screen dimension
+   *  - camera megapixels
+   *
+   * 2) Print to the console
+   * 3) Read another file from the data folder (for example the movies json)
+   *  - print the schema and count the number of rows
+   */
+
+  // create df by hand from tuples
+  val smartPhones = Seq(
+    ("Apple","iPhone16e",6.1,48),
+    ("Apple","iPhone16",6.1,24),
+    ("Apple","iPhone15",6.1,24),
+    ("Xiaomi","15T Ultra",6.4,108),
+    ("Xiaomi","Mi 5",5.4,24)
+  )
+
+  // create df with implicits using column names
+  val smartPhonesDF = smartPhones.toDF("Maker","Model","Screen Size","Megapixels")
+
+  smartPhonesDF.show()
+
+  // read json
+  // reading a DF
+  val moviesDF = spark.read
+    .format("json") // format to read from
+    .option("inferSchema","true") // figure out data types from json structure
+    .load("src/main/resources/data/movies.json")
+
+  val moviesRowCount = moviesDF.count()
+
+  println(s"Movies available: $moviesRowCount")
+
+  moviesDF.printSchema()
+
+
+
+
+
 
 
 }
