@@ -110,4 +110,5 @@ object ScalaRecap extends App {
     - companion objects of the types involved in the method call
    */
 
+  // Esquema en papel
 }
