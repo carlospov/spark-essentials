@@ -2,6 +2,7 @@ package part2dataframes
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions.{col, column, expr}
+import org.apache.spark.sql.types.{DoubleType, LongType, StringType, StructField, StructType}
 
 object ColumnsAndExpressions extends App{
 
@@ -97,6 +98,122 @@ object ColumnsAndExpressions extends App{
   // distinct values
   val allCountriesDF = allCarsDF.select("Origin").distinct()
   allCountriesDF.show()
+
+  /**
+   * Exercises
+   *
+   * 1. Read the movies dataframe and select 2 columns of your choice
+   * 2. Create a new dataframe summing up the total profit of the movie = US_GRoss + Worldwide_Gross + DVD_Sales
+   * 3. Select all the comedy movies (on Major_Genre) with IMDB rating above 6
+   *
+   * For every exercise, use as many versions as possible
+   */
+
+  //1
+  /*
+    val spark = SparkSession.builder()
+    .appName("DF Columns and Expressions")
+    .config("spark.master","local")
+    .getOrCreate()
+   */
+
+//  val moviesDF = spark.read
+//    .format("json")
+//    .option("inferSchema","true")
+//    .load("src/main/resources/data/movies.json")
+
+//  val moviesDF = spark.read
+//    .option("inferSchema","true")
+//    .json("src/main/resources/data/movies.json")
+
+
+  val moviesSchema = StructType(Array(
+    StructField("Title",StringType),
+    StructField("US_Gross",LongType),
+    StructField("Worldwide_Gross",LongType),
+    StructField("US_DVD_Sales",LongType),
+    StructField("Production_Budget",LongType),
+    StructField("Release_Date",StringType),
+    StructField("MPAA_Rating",StringType),
+    StructField("Running_Time_min",LongType),
+    StructField("Distributor",StringType),
+    StructField("Source",StringType),
+    StructField("Major_Genre",StringType),
+    StructField("Creative_Type",StringType),
+    StructField("Director",StringType),
+    StructField("Rotten_Tomatoes_Rating",LongType),
+    StructField("IMDB_Rating",DoubleType),
+    StructField("IMDB_Votes",LongType)
+  ))
+
+  val moviesDF = spark.read
+    .schema(moviesSchema)
+    .option("nullValue","0")
+    .json("src/main/resources/data/movies.json")
+
+  val firstMovieColumn = moviesDF.col("Title")
+  val secondMovieColumn = moviesDF.col("Release_Date")
+
+  moviesDF.select(
+    firstMovieColumn,
+    secondMovieColumn
+  ).show()
+
+  import spark.implicits._
+  moviesDF.select(
+    moviesDF.col("Title"),
+    col("Release_Date")
+  ).show()
+
+  moviesDF.select(
+    column("Title"),
+    'Release_Date
+  ).show()
+  moviesDF.select(
+    $"Title",
+    expr("Release_Date") // EXPRESSION
+  ).show()
+
+  // 2
+//
+//  val TotalProfitOnMovies = moviesDF.selectExpr(
+//    "Title",
+//    "Release_Date",
+//    "US_Gross",
+//    "Worldwide_Gross",
+//    "US_DVD_Sales",
+//    "US_Gross + Worldwide_Gross + US_DVD_Sales as Total_Gross"
+//  )
+//
+//  val TotalProfitOnMovies = moviesDF.select(
+//    col("Title"),
+//    col("Release_Date"),
+//    col("US_Gross"),
+//    col("Worldwide_Gross"),
+//    col("US_DVD_Sales"),
+//    (col("US_Gross") + col("Worldwide_Gross")).as("Total_Gross")
+//  )
+
+  val TotalProfitOnMovies = moviesDF.select("Title","US_Gross","Worldwide_Gross").withColumn("Total_Gross", col("US_Gross") + col("Worldwide_Gross"))
+  TotalProfitOnMovies.show()
+
+
+  // 3
+  //val goodComedyMovies = moviesDF.filter(col("Major_Genre") === "Comedy").filter(col("IMDB_Rating") >= "6")
+//  val goodComedyMovies = moviesDF.where((col("Major_Genre") === "Comedy").and(col("IMDB_Rating") >= "6"))
+//  val goodComedyMovies = moviesDF.filter(col("Major_Genre") === "Comedy" and col("IMDB_Rating") >= 6)
+//  val goodComedyMovies = moviesDF.where(col("Major_Genre") === "Comedy" and col("IMDB_Rating") >= 6)
+//  val goodComedyMovies = moviesDF.filter("Major_Genre = 'Comedy' and IMDB_Rating >= 6")
+//  val goodComedyMovies = moviesDF.select("Title","IMDB_Rating").filter("Major_Genre = 'Comedy' and IMDB_Rating >= 6")
+  val goodComedyMovies = moviesDF.select("Title","IMDB_Rating")
+    .where(col("Major_Genre") === "Comedy")
+    .where(col("IMDB_Rating") >= 6)
+
+  goodComedyMovies.show()
+
+
+
+
 
 
 
