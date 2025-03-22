@@ -1,7 +1,8 @@
 package part2dataframes
 
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.functions.expr
+import org.apache.spark.sql.functions.{col, expr, first, max, struct}
+import part2dataframes.DataSources.{employeesDF, moviesDF}
 
 object Joins extends App{
   val spark = SparkSession.builder()
@@ -55,10 +56,74 @@ object Joins extends App{
   // using complex types: you can use any kind of expression as join condition
   guitaristsDF.join(guitarsDF.withColumnRenamed("id","guitarId"), expr("array_contains(guitars, guitarId)")).show()
 
+  /**
+   * Exercises
+   *  - show all employees and their max salary
+   *  - show all employees who where never managers
+   *  - find the job titles of the best paid 10 employees in the company
+   *
+   *
+   */
 
+  val salaries = spark.read
+    .format("jdbc")
+    .option("driver","org.postgresql.Driver")
+    .option("url","jdbc:postgresql://localhost:5432/rtjvm")
+    .option("user","docker")
+    .option("password","docker")
+    .option("dbtable","public.salaries")
+    .load()
 
+  val employees = spark.read
+    .format("jdbc")
+    .option("driver","org.postgresql.Driver")
+    .option("url","jdbc:postgresql://localhost:5432/rtjvm")
+    .option("user","docker")
+    .option("password","docker")
+    .option("dbtable","public.employees")
+    .load()
 
+  val titles = spark.read
+    .format("jdbc")
+    .option("driver","org.postgresql.Driver")
+    .option("url","jdbc:postgresql://localhost:5432/rtjvm")
+    .option("user","docker")
+    .option("password","docker")
+    .option("dbtable","public.titles")
+    .load()
 
+  val dept_manager = spark.read
+    .format("jdbc")
+    .option("driver","org.postgresql.Driver")
+    .option("url","jdbc:postgresql://localhost:5432/rtjvm")
+    .option("user","docker")
+    .option("password","docker")
+    .option("dbtable","public.dept_manager")
+    .load()
 
+  // 1
+
+  val employeesMaxSalary = salaries
+    .groupBy(col("emp_no"))
+    .agg(max("salary").as("Max_Salary"))
+    .orderBy(col("Max_Salary").desc_nulls_last)
+
+  employeesMaxSalary.show()
+
+  employees.join(employeesMaxSalary, employees.col("emp_no") === employeesMaxSalary.col("emp_no"), "left_outer").drop(employees.col("emp_no")).show()
+
+  // 2
+
+  employees.join(dept_manager, employees.col("emp_no") === dept_manager.col("emp_no"), "left_anti").show()
+
+  // 3
+  val mostRecentJobTitles = titles.groupBy("emp_no","title").agg(max("to_date"))
+  val bestPaidEmployees = employees.join(employeesMaxSalary, "emp_no").orderBy(col("Max_Salary").desc).limit(10)
+  val bestPaidJobs = bestPaidEmployees.join(mostRecentJobTitles, "emp_no")
+
+  bestPaidJobs.show()
+
+  // imho this query it's not okay, it asks for the best paid employees TODAY not all-time.
+  // Someone whose salary has descended to the 11th but had the top 1 salary once would also appear in the list
 
 }
