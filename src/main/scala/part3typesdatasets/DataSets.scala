@@ -1,8 +1,8 @@
 package part3typesdatasets
 
-import org.apache.spark.sql.{DataFrame, Dataset, Encoders, SparkSession}
+import org.apache.spark.sql.{DataFrame, Dataset, Encoders, KeyValueGroupedDataset, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.Encode
-import org.apache.spark.sql.functions.{avg, col}
+import org.apache.spark.sql.functions.{array_contains, avg, col}
 
 import java.sql.Date
 
@@ -107,8 +107,64 @@ object DataSets extends App{
   carsDS.select(avg(col("Horsepower"))).show()  // same as above, we can also use the DF functions on the DS
 
 
+  // datasets Part 2
 
+  // Joins
+  case class Guitar(
+                   id: Long,  // Long instead of Int because when we are inferring Schema, Spark reads numbers as Longs by default
+                   make: String,
+                   model: String,
+                   guitarType: String
+                   )
 
+  case class GuitarPlayer(
+                         id: Long,
+                         name: String,
+                         guitars: Seq[Long],
+                         band: Long
+                         )
+
+  case class Band(
+                 id: Long,
+                 name: String,
+                 hometown: String,
+                 year: Long
+                 )
+
+  val guitarsDS = readDataFrame("guitars.json").as[Guitar]
+  val guitarPlayersDS = readDataFrame("guitarPlayers.json").as[GuitarPlayer]
+  val bandsDS = readDataFrame("bands.json").as[Band]
+
+  val guitarPlayerBandsDS: Dataset[(GuitarPlayer, Band)] = guitarPlayersDS.joinWith(bandsDS, guitarPlayersDS.col("band") === bandsDS.col("id"), "inner")
+  guitarPlayerBandsDS.show()
+
+//  +--------------------+--------------------+
+//  |                  _1|                  _2|
+//  +--------------------+--------------------+
+//  |{1, [1], 1, Angus...|{Sydney, 1, AC/DC...|
+//  |{0, [0], 0, Jimmy...|{London, 0, Led Z...|
+//  |{3, [3], 3, Kirk ...|{Los Angeles, 3, ...|
+//  +--------------------+--------------------+
+//
+//  The columns are _1 and _2 bc we have a dataset of a "tuple of seq of types", so each of the column contains
+//  a set of values corresponding to the values in the columns of original datasets
+//  We can't change name of columns, they don't actually exist
+
+  /**
+   * Exercise
+   *
+   * - Join GuitarPlayersDS with GuitarsDS with condition guitar id is contained in the guitar player's guitars seq
+   *    and use outer join
+   *    Hint: Use array_contains
+   */
+
+  val exercise1 = guitarPlayersDS.joinWith(guitarsDS, array_contains(guitarPlayersDS.col("guitars"), guitarsDS.col("id")), "outer")
+  exercise1.show()
+
+  // Grouping
+  //  val carsGroupedByOrigin: KeyValueGroupedDataset[String, Car] = carsDS.groupByKey(_.Origin)
+  // val carsGroupedByOrigin: Dataset[(String, Long)] = carsDS.groupByKey(_.Origin).count()
+  val carsGroupedByOrigin= carsDS.groupByKey(_.Origin).count().show()
 
 
 
