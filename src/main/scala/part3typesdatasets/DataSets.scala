@@ -1,7 +1,8 @@
 package part3typesdatasets
 
-import org.apache.spark.sql.{Dataset, Encoders, SparkSession}
+import org.apache.spark.sql.{DataFrame, Dataset, Encoders, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.Encode
+import org.apache.spark.sql.functions.{avg, col}
 
 import java.sql.Date
 
@@ -11,7 +12,7 @@ object DataSets extends App{
     .config("spark.master","local")
     .getOrCreate()
 
-  val numbersDF = spark.read.format("csv")
+  val numbersDF: DataFrame = spark.read.format("csv")
     .option("header","true")
     .option("inferSchema","true")
     .load("src/main/resources/data/numbers.csv")
@@ -31,17 +32,18 @@ object DataSets extends App{
 
   // what if there's more columns?? dataset of a complex type
   // step 1- define your type, most of the time it will be a case class
-  case class Car(
-                 Name: String,
-                 Miles_per_Gallon: Double,
-                 Cylinders: Long,
-                 Displacement: Double,
-                 Horsepower: Long,
-                 Weight_in_lbs: Long,
-                 Acceleration: Double,
-                 Year: Date,
-                 Origin: String
-                )  // types are as in a schema
+//  case class Car(
+//                 Name: String,
+//                 Miles_per_Gallon: Double,
+//                 Cylinders: Long,
+//                 Displacement: Double,
+//                 Horsepower: Long,
+//                 Weight_in_lbs: Long,
+//                 Acceleration: Double,
+//                 Year: Date,
+//                 Origin: String
+//                )  // types are as in a schema
+  // ^^^^non-nullable old version
 
   // step 2 - read dataframe
   def readDataFrame(filename: String) = spark.read
@@ -67,8 +69,72 @@ object DataSets extends App{
   // DS collection functions
   numbersDS.filter(_ < 100).show
 
+  // maps, flatmap, folds, reduce, for comprehensions, filters, everything... on the datasets of our objects
+  val carNamesDS = carsDS.map(car => car.Name.toUpperCase())
+
+  carNamesDS.show() // this will action and program will crash because of nulls, that is because of the type of columns
+  // typing columns the way we did forces them to be non-nullable
+
+  case class Car(
+                  Name: String,
+                  Miles_per_Gallon: Option[Double],
+                  Cylinders: Long,
+                  Displacement: Double,
+                  Horsepower: Option[Long],
+                  Weight_in_lbs: Long,
+                  Acceleration: Double,
+                  Year: Date,
+                  Origin: String
+                )  // this way makes them nullable
 
 
+  /**
+   * Exercises
+   * - Count how many cars we have
+   * - Count how many powerful (HP > 140) cars we have
+   * - Compute the average horsepower for the entire dataset
+   */
+
+  val numberOfCars = carsDS.count()
+  println(numberOfCars)
+
+  val PowerfulCars = carsDS.filter(_.Horsepower.getOrElse(0L) > 140).count()
+  println(PowerfulCars)
+
+  val avgHP = carsDS.map(_.Horsepower.getOrElse(0L)).reduce(_ + _) / numberOfCars
+  println(avgHP)
+
+  carsDS.select(avg(col("Horsepower"))).show()  // same as above, we can also use the DF functions on the DS
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  // notes:
+
+//  in Spark 3.0.2 the cars dataFrame cant be read:
+//    Cannot up cast `Year` from string to date.
+//  The type path of the target object is:
+//  - field (class: "java.sql.Date", name: "Year")
+//  - root class: "part3typesdatasets.DataSets.Car"
+//  You can either add an explicit cast to the input data or choose a higher precision type of the field in the target object;
+//  The way to solve is: add the caseclass's schema when reading:
+//    spark.read
+//    .option("inferSchema", "true")
+//    .schema(Encoders.product[Car].schema)
+//    .json(s"src/main/resources/data/$filename")
 
 
 }
