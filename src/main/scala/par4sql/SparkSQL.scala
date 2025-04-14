@@ -141,17 +141,19 @@ object SparkSQL extends App{
     .option("dbtable", s"public.$tableName")
     .load()
 
-  val employeesDF = readTable("employees")
-  employeesDF.write
-    .mode(SaveMode.Overwrite)
-    .saveAsTable("employees") // save the dataframe under the table name "employees" in the database we are building in the warehouse (instead of the postgree)
+//  val employeesDF = readTable("employees")
+//  employeesDF.write
+//    .mode(SaveMode.Overwrite)
+//    .saveAsTable("employees") // save the dataframe under the table name "employees" in the database we are building in the warehouse (instead of the postgree)
 
-  def transferTables(tableNames: List[String]) = tableNames.foreach { tableName =>
+  def transferTables(tableNames: List[String], shouldWriteToWarehouse: Boolean = false) = tableNames.foreach { tableName =>
     val tableDF = readTable(tableName)
     tableDF.createOrReplaceTempView(tableName)
-    tableDF.write
-      .mode(SaveMode.Overwrite)
-      .saveAsTable(tableName)
+    if (shouldWriteToWarehouse){
+      tableDF.write
+        .mode(SaveMode.Overwrite)
+        .saveAsTable(tableName)
+    }
   }
 
   transferTables(List("employees",
@@ -161,7 +163,71 @@ object SparkSQL extends App{
     "salaries",
     "dept_manager"))
 
-  // read DF from data warehouse
-  val employeesDF2 = spark.read.table("employees") // will be loaded as dataframe
+  // read DF from loaded Spark tables
+//  val employeesDF2 = spark.read.table("employees") // will be loaded as dataframe
+
+
+  /** Exercises
+   *
+   * 1. Read the movies DF and store it a table in the rtjvm database
+   * 2. Count how many employees were hired (hire Date) in between Jan 1 1999 and Jan 1 2000
+   * 3. Show the average salaries for the employees hired in-between those dates grouped by dept. number
+   * 4. Show the name of the best-paying department for employees hired in between those dates
+   *
+   * */
+
+  /** Remember of joins */
+//  spark.sql(
+//    """
+//      |select *
+//      |from employees e, dept_emp d
+//      |where e.emp_no = d.emp_no
+//      |""".stripMargin)
+
+  // 1
+//  val moviesDF = spark.read
+//    .option("inferSchema", "true")
+//    .json("src/main/resources/data/movies.json")
+//
+//  moviesDF.createOrReplaceTempView("movies")
+//  moviesDF.write
+//    .mode(SaveMode.Overwrite)
+//    .saveAsTable("movies")
+
+  // 2
+
+  val hiredOnDates = spark.sql(
+    """
+      |select count(*)
+      |from employees
+      |where hire_date > '1999-01-01' AND hire_date < '2000-01-01'
+      |""".stripMargin)
+
+  hiredOnDates.show()
+
+  // 3
+  spark.sql(
+    """
+      |select de.dept_no, avg(s.salary)
+      |from employees e, dept_emp de, salaries s
+      |where e.hire_date > '1999-01-01' AND e.hire_date < '2000-01-01'
+      | AND e.emp_no = de.emp_no
+      | AND e.emp_no = s.emp_no
+      |group by de.dept_no
+      |""".stripMargin).show()
+
+  // 4
+  spark.sql(
+    """
+      |select avg(s.salary) as payment, d.dept_name
+      |from employees e, dept_emp de, salaries s, departments d
+      |where e.hire_date > '1999-01-01' AND e.hire_date < '2000-01-01'
+      | AND e.emp_no = de.emp_no
+      | AND e.emp_no = s.emp_no
+      | AND de.dept_no = d.dept_no
+      |group by d.dept_name
+      |order by payment desc
+      |limit 1
+      |""".stripMargin).show()
 
 }
