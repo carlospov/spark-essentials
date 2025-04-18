@@ -1,4 +1,4 @@
-package par4sql
+package part4sql
 
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.functions._
