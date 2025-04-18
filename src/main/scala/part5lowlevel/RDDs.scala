@@ -36,6 +36,24 @@ object RDDs extends App{
     .map(tokens => StockValue(tokens(0), tokens(1), tokens(2).toDouble))
 
   // 3 - read from a DataFrame
+  val stocksDF = spark.read
+    .option("header","true")
+    .option("inferSchema", "true")
+    .csv("src/main/resources/data/stocks.csv")
+
+  val stocksRDD4 = stocksDF.rdd // also valid, but we will obtain RDD[ROw], not RDD[StockValue]
+
+  import spark.implicits._
+  val stocksDS = stocksDF.as[StockValue]
+  val stocksRDD3 = stocksDS.rdd // RDD[StockValue]
+  // ^^do this to keep type information
+
+  // RDD -> DF
+  val numbersDF = numbersRDD.toDF("numbers") // you lose the type information because DF have no types
+
+  // RDD -> DS
+  val numbersDS = spark.createDataset(numbersRDD) // this keeps type information
+
 
 
 }
