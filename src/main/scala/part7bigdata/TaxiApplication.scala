@@ -438,7 +438,7 @@ object TaxiApplication extends App{
    */
   // 40k dollars in 2 days == 6 millions a year
 
-
+  // followed lesson of the deployment on EMR but didn't take notes
 
 
 
