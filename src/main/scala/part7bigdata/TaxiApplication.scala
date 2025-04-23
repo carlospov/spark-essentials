@@ -2,6 +2,7 @@ package part7bigdata
 
 import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.{Encoders}
 
 object TaxiApplication extends App{
   val spark = SparkSession.builder()
@@ -177,7 +178,7 @@ object TaxiApplication extends App{
     .groupBy("hour_of_day","isLong") // group by that hour
     .agg(count("*").as("totalTrips")) // aggregate on count of rows, naming "totalTrips"
     .orderBy(col("totalTrips").desc_nulls_last) // order descending by total trips
-  pickupsByHourByLengthDF.show(48) // 48 rows is the entire df
+  // pickupsByHourByLengthDF.show(48) // 48 rows is the entire df
 
   /*
 +-----------+------+----------+
@@ -288,8 +289,8 @@ object TaxiApplication extends App{
     .drop("PULocationID","DOLocationID") // Are the ID, not the names
     .orderBy(col("totalTrips").desc_nulls_last)
 
-  pickupDropoffPopularity(col("isLong")).show()
-  pickupDropoffPopularity(not(col("isLong"))).show()
+  //pickupDropoffPopularity(col("isLong")).show()
+  //pickupDropoffPopularity(not(col("isLong"))).show()
 
   // There is a clear separation between long/short trips:
   // --> Short trips are between wealthy NY zones
@@ -298,6 +299,144 @@ object TaxiApplication extends App{
   // Proposal for the taxi company:
   //        - separate market segments and tailor services for each
   //        - Strike a partnership with bars/restaurants on wealthy zones for pickup service
+
+  // 6
+  val paymentTypeDistributionDF = taxiDF // Which payment type are most popular?
+    .groupBy(col("payment_type")) // for every payment type
+    .agg(count("*").as("totalTrips")) // count rows and enconde as totalTrips
+    .orderBy(col("totalTrips").desc_nulls_last) // order descending
+
+  //paymentTypeDistributionDF.show()
+
+  /*
++------------+----------+
+|payment_type|totalTrips|
++------------+----------+
+|           1|    324387|  // 1  = credit card
+|           2|      5878|  // 2  = cash
+|           5|       895|  // 5  = unknown
+|           3|       530|  // 3  = no charge
+|           4|       193|  // 4  = dispute
+|          99|         7|  // 99 = ???
+|           6|         3|  // 6  = voided
++------------+----------+
+   */
+
+  // most trips are paid using credit card
+  // Cash is dying
+
+  // Question 7 will draw meaningful conclusions when asked the full dataset, the following is the how-to:
+  // 7
+  val paymentTypeEvolution = taxiDF
+    .groupBy(to_date(col("tpep_pickup_datetime")).as("pickup_day"), col("payment_type"))
+    .agg(count("*").as("totalTrips"))
+    .orderBy(col("pickup_day"))
+
+  // paymentTypeEvolution.show()
+/*
++----------+------------+----------+
+|pickup_day|payment_type|totalTrips|
++----------+------------+----------+
+|2018-01-24|           1|      4957|
+|2018-01-24|           2|      2026|
+|2018-01-24|           3|        52|
+|2018-01-24|           4|        15|
+|2018-01-25|           3|      1487|
+|2018-01-25|           2|     86339|
+|2018-01-25|           1|    236640|
+|2018-01-25|           4|       377|
++----------+------------+----------+
+ */
+
+  // 8
+  // first we have to "bucketize" time
+  val groupAttempsDF = taxiDF
+    .select(round(unix_timestamp(col("tpep_pickup_datetime")) / 300).cast("integer").as("fiveMinId"), col("PULocationID"), col("total_amount"))
+    // unix is the absolute number of seconds since jan 1st 1970
+    // dividing by 300 we obtain a 5-minute bucket partition of the time. This expression is double, so round to the nearest integer, and casting the result to integer
+    // column named as "fiveMinId", also selecting PULocationID and total_amount
+    .where(col("passenger_count") < 3) // cars avg 4 seats
+    .groupBy(col("fiveMinId"), col("PULocationID")) // same five minutes and same pickup location
+    .agg(count("*").as("total_trips"), sum(col("total_amount").as("total_amount"))) // how many of this groupable trips are there?
+    .orderBy(col("total_trips").desc_nulls_last) // rank them
+    .withColumn("approximate_datetime", from_unixtime(col("fiveMinId") * 300)) // reconvert to readable timestamp
+    .drop("fiveMinId") // drop unreadable column of the 5-minute buckets
+    .join(taxiZonesDF, col("PULocationID") === col("LocationID")) // join with taxi zones dataframe to actually see the name of locations names
+    .drop("LocationID", "service_zone") // drop duped ID and names
+
+  // groupAttempsDF.show()
+
+/*
++------------+-----------+---------------------------------+--------------------+---------+--------------------+
+|PULocationID|total_trips|sum(total_amount AS total_amount)|approximate_datetime|  Borough|                Zone|
++------------+-----------+---------------------------------+--------------------+---------+--------------------+
+|         264|          7|                            119.3| 2018-01-24 23:45:00|  Unknown|                  NV|
+|         239|          4|                            45.31| 2018-01-25 00:00:00|Manhattan|Upper West Side S...|
+|         140|          5|                            48.96| 2018-01-24 23:15:00|Manhattan|     Lenox Hill East|
+|          50|          6|                            96.45| 2018-01-24 23:55:00|Manhattan|        Clinton West|
+|         138|          2|                            68.06| 2018-01-24 23:35:00|   Queens|   LaGuardia Airport|
+|          61|          1|                            16.55| 2018-01-24 23:05:00| Brooklyn| Crown Heights North|
+|         209|          2|                            39.18| 2018-01-25 01:25:00|Manhattan|             Seaport|
+|          90|          2|                             44.6| 2018-01-25 01:20:00|Manhattan|            Flatiron|
+|         142|          2|               15.600000000000001| 2018-01-25 01:20:00|Manhattan| Lincoln Square East|
+|         170|          4|                76.46000000000001| 2018-01-25 02:25:00|Manhattan|         Murray Hill|
+|           4|          2|                            41.35| 2018-01-25 02:05:00|Manhattan|       Alphabet City|
+|          43|          1|                             18.3| 2018-01-25 03:35:00|Manhattan|        Central Park|
+|         226|          1|                             13.3| 2018-01-25 03:15:00|   Queens|           Sunnyside|
+|         164|          5|                            87.91| 2018-01-25 03:55:00|Manhattan|       Midtown South|
+|         162|          1|                            17.25| 2018-01-25 03:10:00|Manhattan|        Midtown East|
+|          50|          1|                              5.3| 2018-01-25 03:25:00|Manhattan|        Clinton West|
+|         263|          5|               127.57000000000001| 2018-01-25 04:40:00|Manhattan|      Yorkville West|
+|         249|          3|                           136.37| 2018-01-25 04:20:00|Manhattan|        West Village|
+|         143|          8|                            94.74| 2018-01-25 05:35:00|Manhattan| Lincoln Square West|
+|         107|         26|               307.71000000000004| 2018-01-25 06:15:00|Manhattan|            Gramercy|
++------------+-----------+---------------------------------+--------------------+---------+--------------------+
+ */
+
+  // Lots of close taxi rides
+  // --> Proposal: Incentivize people to take a grouped ride, at a discount
+  //            - lower cost
+  //            - more competitive with lower prices
+  //            - fewer emissions, so can ask for a subsidy on the project
+
+  // We will make a model for estimating potential economic impact over the dataset
+  // Parameters:
+  //    - Let's assume we invented a technology that could group taxi rides by sending notifications to users' smartphones and
+  //    that can detect 5% of rides as groupable
+  //    - Let's assume 30% actually accept to be grouped
+  //    - 5$ discount if you take a group ride
+  //    - 2$ extra if you take an individual ride (bc of privacy/time)
+  //    - Let's assume that if two rides grouped, cost reductions are on the 60% of one avg ride
+
+  val percentGroupAttempt = 0.05
+  val percentAcceptGrouping = 0.3
+  val discount = 5
+  val extraCost = 2
+
+  implicit val doubleEncoder = Encoders.scalaDouble
+  val avgCostReduction = 0.6 * taxiDF.select(avg(col("total_amount"))).as[Double].take(1)(0)
+
+  val groupingEstimatedEconomicImpactDF = groupAttempsDF
+    .withColumn("groupedRides", col("total_trips") * percentGroupAttempt)
+    .withColumn("acceptedGroupRidesEconomicImpact", col("groupedRides") * percentAcceptGrouping * (avgCostReduction - discount))
+    .withColumn("rejectedGroupRidesEconomicImpact", col("groupedRides") * (1 - percentAcceptGrouping) * extraCost)
+    .withColumn("totalImpact", col("acceptedGroupRidesEconomicImpact") + col("rejectedGroupRidesEconomicImpact"))
+    .orderBy(col("totalImpact").desc_nulls_last)
+
+  groupingEstimatedEconomicImpactDF.show(100)
+
+  val totalProfitDF = groupingEstimatedEconomicImpactDF
+    .select(sum(col("totalImpact")).as("total"))
+
+  totalProfitDF.show()
+  /*
++-----------------+
+|            total|
++-----------------+
+|39987.73868641883|
++-----------------+
+   */
+  // 40k dollars in 2 days == 6 millions a year
 
 
 
